@@ -1,0 +1,67 @@
+### EXECUTION SETTING ###
+# The using GPU ID
+cuda_id: 0
+# whether you use comet-ml for visualizing the training procedure
+comet: False
+# The Running mode (train or test)
+mode: train
+# fine-tuning specify the ckpt dir name you want to load the model params.
+# if you want to turn off the fine-tuning mode Set to .
+finetune: False
+# The state path which you want to resume the training
+resume: False
+
+### TRAINING PARAMETERS ###
+num_epochs: 16
+# the number of max iteration
+max_iter: 200000
+# the batch size
+batch_size: 16
+
+### DATA AUGMENTATION ###
+# the mask augmentaiton flag
+mask_augment: True
+
+### NETWORK SETTING ###
+# UNet layer size
+layer_size: 5
+
+### LOSS PARAMETERS ###
+valid_coef: 5.0
+reconstruction_coef: 15.0
+MSE_coef: 9.0
+edge_coef: 3.0
+tv_coef: 1.0
+thresholded_tv_coef: 20.0
+perc_coef: 0.0                                        
+style_coef: 0.0
+variance_coef: 0.025
+log_var_L2reg_coef: 0.0
+ssim_coef: 0.5
+# total variation calculation method (mean or sum)
+tv_loss: mean
+
+### OPTIMIZATION PARAMETERS ###
+optim: Adam
+initial_lr: 0.0002
+finetune_lr: 0.0005
+momentum: 0
+weight_decay: 0
+
+### LOG INTERVALS ###
+# viaulizing the output images
+vis_interval: 100
+# saving the model
+save_model_interval: 300
+# printing the losses to standard output line
+log_interval: 10
+
+### DIRECTORY PATH ###
+data_root: /home/jakob/raisim_workspace/raisimLib/output/urban_dataset
+#/home/jakob/Desktop/CNN/partialconv/data     #~/data
+ckpt: /home/jakob/Desktop/CNN/partialconv/ckpt
+
+### COMET ML SETTING ###
+api_key: api_key
+project_name: project_name
+workspace: user_name

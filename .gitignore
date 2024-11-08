@@ -120,5 +120,5 @@ examples/
 *.swp
 *.pth
 Pipfile
-config.yml
 
+/logs/

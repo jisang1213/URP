@@ -31,18 +31,18 @@ class PartialConv2d(nn.Conv2d):
             if self.mask_kernel.type() != img.type():
                 self.mask_kernel = self.mask_kernel.to(img)
             # Create the updated mask
-            # for calcurating mask ratio (sum(1) / sum(M))
+            # for calculating mask ratio (sum(1) / sum(M))
             self.update_mask = F.conv2d(mask, self.mask_kernel,
                                         bias=None, stride=self.stride,
                                         padding=self.padding,
                                         dilation=self.dilation,
                                         groups=1)
-            # calcurate mask ratio (sum(1) / sum(M))
+            # calculate mask ratio (sum(1) / sum(M))
             self.mask_ratio = self.sum1 / (self.update_mask + 1e-8)
             self.update_mask = torch.clamp(self.update_mask, 0, 1)
             self.mask_ratio = torch.mul(self.mask_ratio, self.update_mask)
 
-        # calcurate WT . (X * M)
+        # calculate WT . (X * M)
         conved = torch.mul(img, mask)
         conved = F.conv2d(conved, self.weight, self.bias, self.stride,
                           self.padding, self.dilation, self.groups)
@@ -99,7 +99,7 @@ class PConvActiv(nn.Module):
         if dec:
             self.upcat = UpsampleConcat()
         if bn:
-            bn = nn.BatchNorm2d(out_ch)
+            self.bn = nn.BatchNorm2d(out_ch)
         if active == 'relu':
             self.activation = nn.ReLU()
         elif active == 'leaky':
@@ -119,7 +119,7 @@ class PConvActiv(nn.Module):
 
 
 class PConvUNet(nn.Module):
-    def __init__(self, finetune, in_ch=3, layer_size=6):
+    def __init__(self, finetune, in_ch=1, out_ch=1, layer_size=6):
         super().__init__()
         self.freeze_enc_bn = True if finetune else False
         self.layer_size = layer_size
@@ -140,8 +140,10 @@ class PConvUNet(nn.Module):
         self.dec_4 = PConvActiv(512+256, 256, dec=True, active='leaky')
         self.dec_3 = PConvActiv(256+128, 128, dec=True, active='leaky')
         self.dec_2 = PConvActiv(128+64,   64, dec=True, active='leaky')
-        self.dec_1 = PConvActiv(64+3,      3, dec=True, bn=False,
+        self.dec_1 = PConvActiv(64+in_ch, out_ch, dec=True, bn=False,
                                 active=None, conv_bias=True)
+
+        # 2 output channels: one for mean and one for variance
 
     def forward(self, img, mask):
         enc_f, enc_m = [img], [mask]
@@ -162,6 +164,7 @@ class PConvUNet(nn.Module):
             feature, update_mask = getattr(self, 'dec_{}'.format(layer_num))(
                     feature, update_mask, enc_f.pop(), enc_m.pop())
 
+        # return a two channel output: the mean and the variance. Also return mask
         return feature, mask
 
     def train(self, mode=True):

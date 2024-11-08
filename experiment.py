@@ -1,69 +1,82 @@
 from comet_ml import Experiment
 
 import torch
+import os
 from torchvision import transforms
 
-from src.dataset import Places2
+from src.dataset import Mapdata
+from src.dataset import CustomToTensor
 from src.model import PConvUNet
+from src.mymodel import UNET, weight_init
 from src.loss import InpaintingLoss, VGG16FeatureExtractor
 from src.train import Trainer
 from src.utils import Config, load_ckpt, create_ckpt_dir
+import wandb
 
+# Set seed for reproducibility
+torch.manual_seed(1234)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed(1234)
+    torch.cuda.manual_seed_all(1234)
 
 # set the config
-config = Config("default_config.yml")
+# Get the current directory
+current_dir = os.path.dirname(os.path.realpath(__file__))
+
+# Construct the full path to the config file
+config_file_path = os.path.join(current_dir, "config.yml")
+
+config = Config(config_file_path)
 config.ckpt = create_ckpt_dir()
 print("Check Point is '{}'".format(config.ckpt))
+
+# Save a copy of the config file in the ckpt directory:
+config.make_copy()
 
 # Define the used device
 device = torch.device("cuda:{}".format(config.cuda_id)
                       if torch.cuda.is_available() else "cpu")
+print("CUDA is available" if torch.cuda.is_available() else "CUDA is not available")
 
 # Define the model
 print("Loading the Model...")
-model = PConvUNet(finetune=config.finetune,
-                  layer_size=config.layer_size)
+# model = PConvUNet(finetune=config.finetune, in_ch=1, out_ch=2,
+#                   layer_size=config.layer_size)
+
+model = UNET(in_channels=1, out_channels=2)
+model.apply(weight_init)
+
+print(f"Total number of parameters: {sum(p.numel() for p in model.parameters())}")
+
 if config.finetune:
     model.load_state_dict(torch.load(config.finetune)['model'])
+    
+# Move models to device
 model.to(device)
-
 
 # Data Transformation
 img_tf = transforms.Compose([
-            transforms.ToTensor()
+            transforms.Resize((256, 256)),  # Resize to 256x256
+            CustomToTensor()                # Convert to tensor without normalization
+        ])
+mask_tf = transforms.Compose([
+            transforms.Resize((256, 256)),
+            transforms.ToTensor()           # Convert to tensor with normalization
             ])
-if config.mask_augment:
-    mask_tf = transforms.Compose([
-                transforms.RandomResizedCrop(256),
-                transforms.ToTensor()
-                ])
-else:
-    mask_tf = transforms.Compose([
-                transforms.ToTensor()
-                ])
 
 # Define the Validation set
 print("Loading the Validation Dataset...")
-dataset_val = Places2(config.data_root,
+dataset_val = Mapdata(config.data_root,
                       img_tf,
                       mask_tf,
                       data="val")
 
 # Set the configuration for training
 if config.mode == "train":
-    # set the comet-ml
-    if config.comet:
-        print("Connecting to Comet ML...")
-        experiment = Experiment(api_key=config.api_key,
-                                project_name=config.project_name,
-                                workspace=config.workspace)
-        experiment.log_parameters(config.__dict__)
-    else:
-        experiment = None
 
     # Define the Places2 Dataset and Data Loader
     print("Loading the Training Dataset...")
-    dataset_train = Places2(config.data_root,
+    dataset_train = Mapdata(config.data_root,
                             img_tf,
                             mask_tf,
                             data="train")
@@ -96,15 +109,10 @@ if config.mode == "train":
         print("Starting from iter ", start_iter)
 
     trainer = Trainer(start_iter, config, device, model, dataset_train,
-                      dataset_val, criterion, optimizer, experiment=experiment)
-    if config.comet:
-        with experiment.train():
-            trainer.iterate()
-    else:
-        trainer.iterate()
-
-# Set the configuration for testing
-elif config.mode == "test":
-    pass
-    # <model load the trained weights>
-    # evaluate(model, dataset_val)
+                      dataset_val, criterion, optimizer)
+    
+    for epoch in range(config.num_epochs):
+        trainer.iterate(epoch)
+    wandb.finish()
+    
+exit()

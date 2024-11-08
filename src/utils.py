@@ -5,15 +5,31 @@ import torch
 import torch.nn as nn
 import oyaml as yaml
 
+def assert_no_nans(tensor, name):
+    assert not torch.isnan(tensor).any(), f"{name} contains NaNs!"
+    assert not torch.isinf(tensor).any(), f"{name} contains Infs!"
+    
+def assert_normalized(tensor, name):
+    assert tensor.min() == 0.0, f"{name}: min is not 0!"
+    assert tensor.max() == 1.0, f"{name}: max is not 1! it is {tensor.max()}"
+
+def tensorboard_launcher(directory_path):
+    from tensorboard import program
+    import webbrowser
+    # learning visualizer
+    tb = program.TensorBoard()
+    tb.configure(argv=[None, '--logdir', directory_path, '--port=24682', '--host=0.0.0.0'])
+    url = tb.launch()
+    print("[Inpainting Network] Tensorboard session created: "+url)
+    webbrowser.open_new(url)
 
 def create_ckpt_dir():
     now = datetime.datetime.today()
     ckpt_dir = "ckpt/{0:%m%d_%H%M_%S}".format(now)
-    os.mkdir(ckpt_dir)
-    os.mkdir(os.path.join(ckpt_dir, "val_vis"))
-    os.mkdir(os.path.join(ckpt_dir, "models"))
+    os.makedirs(ckpt_dir)
+    os.makedirs(os.path.join(ckpt_dir, "val_vis"))
+    os.makedirs(os.path.join(ckpt_dir, "models"))
     return ckpt_dir
-
 
 def to_items(dic):
     return dict(map(_to_item, dic.items()))
@@ -34,6 +50,11 @@ class Config(dict):
             return None
 
         return self._conf[name]
+    
+    def make_copy(self):
+        target_path = os.path.join(self.ckpt, 'config_copy.yaml')
+        with open(target_path, 'w') as file:
+            yaml.safe_dump(self._conf, file)
 
 
 def conf_to_param(config: dict) -> dict:
